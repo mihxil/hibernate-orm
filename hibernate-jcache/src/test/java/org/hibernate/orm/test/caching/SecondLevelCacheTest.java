@@ -6,6 +6,7 @@
  */
 package org.hibernate.orm.test.caching;
 
+import jakarta.persistence.*;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -26,15 +27,6 @@ import org.junit.jupiter.api.Test;
 
 import org.jboss.logging.Logger;
 
-import jakarta.persistence.CacheRetrieveMode;
-import jakarta.persistence.CacheStoreMode;
-import jakarta.persistence.Cacheable;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-
 import static org.hibernate.jpa.HibernateHints.HINT_CACHEABLE;
 import static org.hibernate.jpa.HibernateHints.HINT_CACHE_REGION;
 import static org.junit.Assert.assertNotNull;
@@ -44,7 +36,13 @@ import static org.junit.Assert.assertNotNull;
  * @author Vlad Mihalcea
  */
 @Jpa(
-		annotatedClasses = SecondLevelCacheTest.Person.class,
+		annotatedClasses = {
+			SecondLevelCacheTest.Person.class,
+			SecondLevelCacheTest.Being.class,
+			SecondLevelCacheTest.Human.class,
+			SecondLevelCacheTest.Martian.class
+			
+		},
 		integrationSettings = {
 				@Setting(name = AvailableSettings.USE_SECOND_LEVEL_CACHE, value = "true"),
 				@Setting(name = AvailableSettings.CACHE_REGION_FACTORY, value = "jcache"),
@@ -63,6 +61,10 @@ public class SecondLevelCacheTest {
 			aPerson.setName("John Doe");
 			aPerson.setCode("unique-code");
 			entityManager.persist(aPerson);
+			
+			Human aHuman = new Human();
+			aHuman.setName("John Doe");
+			entityManager.persist(aHuman);
 		});
 
 		scope.inTransaction( entityManager -> {
@@ -102,6 +104,24 @@ public class SecondLevelCacheTest {
 			.setParameter("name", "John Doe")
 			.setHint("org.hibernate.cacheable", "true")
 			.getResultList();
+			//end::caching-query-jpa-example[]
+		});
+		
+		scope.inTransaction( entityManager -> {
+			log.info("Jpa query cache and inheritance");
+			//tag::caching-query-jpa-example[]
+			var cb  = entityManager.getCriteriaBuilder();
+			var q = cb.createQuery(Being.class);
+			var root = q.from(Being.class);
+			q.where(cb.equal(root.get("name"), "John Doe"));
+			
+			Human human = (Human) entityManager.createQuery(q)
+				.setHint("org.hibernate.cacheable", "true")
+				.getSingleResult();
+
+			log.info("found %s".formatted(human));
+			
+			
 			//end::caching-query-jpa-example[]
 		});
 
@@ -246,6 +266,37 @@ public class SecondLevelCacheTest {
 	}
 
 	//tag::caching-entity-natural-id-mapping-example[]
+	
+	@Entity(name = "Being")
+	@Inheritance(strategy = InheritanceType.JOINED)
+	@org.hibernate.annotations.Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
+	public static abstract class Being {
+		@Id
+		@GeneratedValue(strategy = GenerationType.AUTO)
+		private Long id;
+
+		@Column
+		private String name;
+
+		public String getName() {
+			return name;
+		}
+
+		public void setName(String name) {
+			this.name = name;
+		}
+	}
+	
+	@Entity(name = "Human")
+	public static class Human extends Being { 
+	 
+	}
+	
+	@Entity(name = "Martian")
+	public static class Martian extends Being { 
+	 
+	}
+	
 	@Entity(name = "Person")
 	@Cacheable
 	@org.hibernate.annotations.Cache(usage = CacheConcurrencyStrategy.READ_WRITE)
