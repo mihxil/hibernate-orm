@@ -125,7 +125,7 @@ public class SecondLevelCacheTest {
 			//end::caching-query-jpa-example[]
 		});
 		
-		// FAILS
+		// FAILS (issue HHH-18279)
 		scope.inTransaction( entityManager -> {
 			log.info("Jpa query cache and inheritance 2");
 			//tag::caching-query-jpa-example[]
