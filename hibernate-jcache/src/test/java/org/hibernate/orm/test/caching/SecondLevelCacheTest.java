@@ -124,6 +124,26 @@ public class SecondLevelCacheTest {
 			
 			//end::caching-query-jpa-example[]
 		});
+		
+		// FAILS
+		scope.inTransaction( entityManager -> {
+			log.info("Jpa query cache and inheritance 2");
+			//tag::caching-query-jpa-example[]
+			var cb  = entityManager.getCriteriaBuilder();
+			var q = cb.createQuery(Being.class);
+			var root = q.from(Being.class);
+			q.where(cb.equal(root.get("name"), "John Doe"));
+			
+			Human human = (Human) entityManager.createQuery(q)
+				.setHint("org.hibernate.cacheable", "true")
+				.getSingleResult();
+
+			log.info("found %s".formatted(human));
+			
+			
+			//end::caching-query-jpa-example[]
+		});
+
 
 		scope.inTransaction( entityManager -> {
 			log.info("Native query cache");
