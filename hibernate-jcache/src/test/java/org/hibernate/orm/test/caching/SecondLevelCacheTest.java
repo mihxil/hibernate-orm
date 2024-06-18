@@ -107,43 +107,29 @@ public class SecondLevelCacheTest {
 			//end::caching-query-jpa-example[]
 		});
 		
-		scope.inTransaction( entityManager -> {
-			log.info("Jpa query cache and inheritance");
-			//tag::caching-query-jpa-example[]
-			var cb  = entityManager.getCriteriaBuilder();
-			var q = cb.createQuery(Being.class);
-			var root = q.from(Being.class);
-			q.where(cb.equal(root.get("name"), "John Doe"));
-			
-			Human human = (Human) entityManager.createQuery(q)
-				.setHint("org.hibernate.cacheable", "true")
-				.getSingleResult();
-
-			log.info("found %s".formatted(human));
-			
-			
-			//end::caching-query-jpa-example[]
-		});
 		
-		// FAILS (issue HHH-18279)
-		scope.inTransaction( entityManager -> {
-			log.info("Jpa query cache and inheritance 2");
-			//tag::caching-query-jpa-example[]
-			var cb  = entityManager.getCriteriaBuilder();
-			var q = cb.createQuery(Being.class);
-			var root = q.from(Being.class);
-			q.where(cb.equal(root.get("name"), "John Doe"));
-			
-			Human human = (Human) entityManager.createQuery(q)
-				.setHint("org.hibernate.cacheable", "true")
-				.getSingleResult();
+		for (int i = 0 ; i < 2; i++) {
+			// FAILS (issue HHH-18279), if i > 0
+			log.info("Jpa query cache and inheritance " + i);
+			scope.inTransaction(entityManager -> {
+				//tag::caching-query-jpa-inheritance-example[]
+				var cb = entityManager.getCriteriaBuilder();
+				var q = cb.createQuery(Being.class);
+				var root = q.from(Being.class);
+				q.where(cb.equal(root.get("name"), "John Doe"));
 
-			log.info("found %s".formatted(human));
-			
-			
-			//end::caching-query-jpa-example[]
-		});
+				Human human = (Human) entityManager.createQuery(q)
+					.setHint("org.hibernate.cacheable", "true")
+					.getSingleResult();
 
+				log.info("found %s".formatted(human));
+
+
+				//end::caching-query-jpa-inheritance-example-[]
+			});
+		}
+		
+	 
 
 		scope.inTransaction( entityManager -> {
 			log.info("Native query cache");
