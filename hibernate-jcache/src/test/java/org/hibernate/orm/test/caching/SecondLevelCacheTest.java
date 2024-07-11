@@ -13,8 +13,7 @@ import java.util.Map;
 
 import org.hibernate.CacheMode;
 import org.hibernate.Session;
-import org.hibernate.annotations.CacheConcurrencyStrategy;
-import org.hibernate.annotations.NaturalId;
+import org.hibernate.annotations.*;
 import org.hibernate.cfg.AvailableSettings;
 import org.hibernate.stat.CacheRegionStatistics;
 import org.hibernate.stat.Statistics;
@@ -36,19 +35,21 @@ import static org.junit.Assert.assertNotNull;
  * @author Vlad Mihalcea
  */
 @Jpa(
-		annotatedClasses = {
-			SecondLevelCacheTest.Person.class,
-			SecondLevelCacheTest.Being.class,
-			SecondLevelCacheTest.Human.class,
-			SecondLevelCacheTest.Martian.class
-			
-		},
-		integrationSettings = {
-				@Setting(name = AvailableSettings.USE_SECOND_LEVEL_CACHE, value = "true"),
-				@Setting(name = AvailableSettings.CACHE_REGION_FACTORY, value = "jcache"),
-				@Setting(name = AvailableSettings.USE_QUERY_CACHE, value = "true"),
-				@Setting(name = AvailableSettings.GENERATE_STATISTICS, value = "true")
-		}
+	annotatedClasses = {
+		SecondLevelCacheTest.Person.class,
+		SecondLevelCacheTest.Being.class,
+		SecondLevelCacheTest.Human.class,
+		SecondLevelCacheTest.Martian.class,
+		SecondLevelCacheTest.Colony.class,
+		
+	},
+	integrationSettings = {
+		@Setting(name = AvailableSettings.USE_SECOND_LEVEL_CACHE, value = "true"),
+		@Setting(name = AvailableSettings.CACHE_REGION_FACTORY, value = "jcache"),
+		@Setting(name = AvailableSettings.USE_QUERY_CACHE, value = "true"),
+		@Setting(name = AvailableSettings.GENERATE_STATISTICS, value = "true"),
+		@Setting(name = AvailableSettings.QUERY_CACHE_LAYOUT, value="SHALLOW_WITH_DISCRIMINATOR")
+	}
 )
 public class SecondLevelCacheTest {
 	private final Logger log = Logger.getLogger( SecondLevelCacheTest.class );
@@ -65,6 +66,15 @@ public class SecondLevelCacheTest {
 			Human aHuman = new Human();
 			aHuman.setName("John Doe");
 			entityManager.persist(aHuman);
+			
+			Martian aMartian = new Martian();
+			aMartian.setName("@#(&!*(#&");
+			entityManager.persist(aMartian);
+			
+			Colony colony = new Colony();
+			colony.queen = aMartian;
+			colony.members = List.of(aHuman, aMartian);
+			entityManager.persist(colony);
 		});
 
 		scope.inTransaction( entityManager -> {
@@ -118,9 +128,9 @@ public class SecondLevelCacheTest {
 				var root = q.from(Being.class);
 				q.where(cb.equal(root.get("name"), "John Doe"));
 
-				Human human = (Human) entityManager.createQuery(q)
+				Human human = cast(entityManager.createQuery(q)
 					.setHint("org.hibernate.cacheable", "true")
-					.getSingleResult();
+					.getSingleResult());
 
 				log.info("found %s".formatted(human));
 
@@ -128,6 +138,8 @@ public class SecondLevelCacheTest {
 				//end::caching-query-jpa-inheritance-example-[]
 			});
 		}
+		
+		
 		
 	 
 
@@ -269,6 +281,16 @@ public class SecondLevelCacheTest {
 			session.getSessionFactory().getCache().evictQueryRegion("query.cache.person");
 			//end::caching-management-evict-native-example[]
 		});
+		
+		scope.inTransaction( entityManager -> {
+			
+			var cb = entityManager.getCriteriaBuilder();
+			var q = cb.createQuery(Colony.class);
+			q.from(Colony.class);
+			
+			Martian queen = entityManager.createQuery(q).getResultList().stream().findFirst().orElseThrow().getQueen();
+			log.info("Found queen %s".formatted(queen));
+		});
 	}
 
 	//tag::caching-entity-natural-id-mapping-example[]
@@ -301,6 +323,23 @@ public class SecondLevelCacheTest {
 	@Entity(name = "Martian")
 	public static class Martian extends Being { 
 	 
+	}
+	
+	@Entity
+	public static class Colony {
+		@Id
+		@GeneratedValue(strategy = GenerationType.AUTO)
+		private Long id;
+		
+		@OneToOne(fetch = FetchType.LAZY)
+		Being queen;
+		
+		@OneToMany
+		List<Being> members;
+		
+		<C extends Being> C getQueen() {
+			return (C) queen;
+		}
 	}
 	
 	@Entity(name = "Person")
@@ -350,4 +389,9 @@ public class SecondLevelCacheTest {
 	//tag::caching-entity-natural-id-mapping-example[]
 	}
 	//end::caching-entity-natural-id-mapping-example[]
+	
+	
+	<T extends Being> T cast(Being b) {
+		return (T) b;
+	}
 }
